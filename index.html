@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>한글 쓰기 도안</title>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nanum Gothic',sans-serif;background:#FDF6FF;color:#2d1b4e;min-height:100vh;display:flex;flex-direction:column}
+#toolbar{background:#fff;border-bottom:2px solid #EDE0FF;padding:11px 20px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;position:sticky;top:0;z-index:200;box-shadow:0 3px 16px rgba(120,80,200,.1)}
+#logo{font-size:17px;font-weight:800;letter-spacing:-1px;white-space:nowrap;color:#5A2D9C}
+#logo span{color:#FF6B9D}
+.sep{width:1px;height:26px;background:#EDE0FF;flex-shrink:0}
+#word-input{font-family:'Nanum Gothic',sans-serif;font-size:21px;font-weight:800;width:170px;padding:7px 13px;border:2.5px solid #A78BFA;border-radius:13px;outline:none;letter-spacing:3px;color:#2d1b4e;background:#FAFAFF;transition:box-shadow .15s}
+#word-input:focus{border-color:#7C3AED;box-shadow:0 0 0 4px rgba(124,58,237,.13)}
+.sw{width:23px;height:23px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .12s;flex-shrink:0}
+.sw.on{border-color:#fff;outline:2.5px solid #5A2D9C;transform:scale(1.2)}
+#tmpl-row{display:flex;gap:6px}
+.tb{background:#F5F0FF;color:#7C3AED;border:1.5px solid #DDD6FE;padding:7px 13px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:'Nanum Gothic',sans-serif;white-space:nowrap;transition:all .15s}
+.tb:hover{background:#EDE0FF}
+.tb.on{background:#7C3AED;color:#fff;border-color:#7C3AED;box-shadow:0 2px 8px rgba(124,58,237,.3)}
+#print-btn{background:#fff;color:#5A2D9C;border:2px solid #DDD6FE;padding:9px 15px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:'Nanum Gothic',sans-serif;transition:background .15s}
+#print-btn:hover{background:#F5F0FF}
+#status{font-size:11px;color:#A0A0B8;white-space:nowrap;margin-left:auto}
+#preview-area{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px 44px;overflow:auto}
+#sheet-wrap{transform-origin:top center}
+#sheet{width:794px;height:1123px;background:#fff;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 48px rgba(90,45,156,.22);border-radius:4px;position:relative}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  html,body{margin:0;padding:0;background:#fff}
+  #toolbar,#preview-area{display:none!important}
+  #pshell{display:block!important;width:210mm;height:297mm;overflow:hidden}
+}
+#pshell{display:none}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <div id="logo">한글<span>쓰기</span> 도안</div>
+  <div class="sep"></div>
+  <input id="word-input" type="text" placeholder="단어 입력" value="기차" maxlength="6" autocomplete="off">
+  <div style="display:flex;gap:6px;align-items:center">
+    <div class="sw on" data-c="#4A90D9" style="background:#4A90D9"></div>
+    <div class="sw" data-c="#7C3AED" style="background:#7C3AED"></div>
+    <div class="sw" data-c="#10B981" style="background:#10B981"></div>
+    <div class="sw" data-c="#F59E0B" style="background:#F59E0B"></div>
+    <div class="sw" data-c="#EF4444" style="background:#EF4444"></div>
+    <div class="sw" data-c="#EC4899" style="background:#EC4899"></div>
+    <div class="sw" data-c="#7B4F2E" style="background:#7B4F2E"></div>
+    <div class="sw" data-c="#1a1a1a" style="background:#1a1a1a"></div>
+  </div>
+  <div class="sep"></div>
+  <div id="tmpl-row">
+    <button class="tb on" data-t="illust">🖼 일러스트형</button>
+    <button class="tb" data-t="charcard">🔠 낱글자형</button>
+    <button class="tb" data-t="clean">✏️ 깔끔형</button>
+  </div>
+  <div class="sep"></div>
+  <button id="print-btn">🖨 인쇄</button>
+  <span id="status">준비 완료</span>
+</div>
+<div id="preview-area">
+  <div id="sheet-wrap">
+    <div id="sheet"></div>
+  </div>
+</div>
+<div id="pshell"></div>
+
+<script>
+const SW=794,SH=1123;
+let acc='#4A90D9', tmpl='illust';
+
+function h2rgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]}
+function hsh(s){let h=0;for(const c of s)h=(Math.imul(31,h)+c.charCodeAt(0))|0;return Math.abs(h)}
+function hasBatchim(ch){const c=ch.charCodeAt(0)-0xAC00;return c>=0&&c<=11171&&c%28!==0}
+function josa(w,a,b){return w+(hasBatchim(w.at(-1))?a:b)}
+function lighten(r,g,b,amt){return[Math.min(r+amt,255),Math.min(g+amt,255),Math.min(b+amt,255)]}
+function darken(r,g,b,amt){return[Math.max(r-amt,0),Math.max(g-amt,0),Math.max(b-amt,0)]}
+
+/* EMOJI MAP */
+const EMAP={
+  강아지:'🐶',개:'🐕',고양이:'🐱',토끼:'🐰',곰:'🐻',판다:'🐼',여우:'🦊',사자:'🦁',호랑이:'🐯',
+  코끼리:'🐘',기린:'🦒',원숭이:'🐒',돼지:'🐷',소:'🐮',말:'🐴',양:'🐑',닭:'🐔',오리:'🦆',
+  펭귄:'🐧',개구리:'🐸',물고기:'🐟',상어:'🦈',고래:'🐋',돌고래:'🐬',나비:'🦋',벌:'🐝',공룡:'🦕',
+  용:'🐉',유니콘:'🦄',
+  사과:'🍎',배:'🍐',오렌지:'🍊',바나나:'🍌',수박:'🍉',포도:'🍇',딸기:'🍓',복숭아:'🍑',
+  체리:'🍒',키위:'🥝',망고:'🥭',파인애플:'🍍',당근:'🥕',고구마:'🍠',토마토:'🍅',버섯:'🍄',
+  케이크:'🎂',아이스크림:'🍦',사탕:'🍬',초콜릿:'🍫',쿠키:'🍪',피자:'🍕',햄버거:'🍔',
+  빵:'🍞',밥:'🍚',도넛:'🍩',김밥:'🍱',우유:'🥛',주스:'🧃',도토리:'🌰',
+  꽃:'🌸',장미:'🌹',해바라기:'🌻',나무:'🌳',소나무:'🌲',야자수:'🌴',선인장:'🌵',
+  해:'☀️',달:'🌙',별:'⭐',구름:'☁️',무지개:'🌈',눈:'❄️',비:'🌧️',바다:'🌊',산:'⛰️',
+  자동차:'🚗',버스:'🚌',기차:'🚂',지하철:'🚇',비행기:'✈️',로켓:'🚀',배:'🚢',
+  자전거:'🚲',소방차:'🚒',구급차:'🚑',경찰차:'🚓',트럭:'🚚',로더:'🚜',헬리콥터:'🚁',
+  책:'📚',연필:'✏️',풍선:'🎈',선물:'🎁',집:'🏠',학교:'🏫',왕관:'👑',하트:'❤️',
+};
+const FOOD_W=new Set(['사과','배','오렌지','바나나','수박','포도','딸기','복숭아','체리','키위','망고','파인애플','당근','고구마','토마토','버섯','케이크','아이스크림','사탕','초콜릿','쿠키','피자','햄버거','빵','밥','도넛','김밥','우유','주스','도토리']);
+const ANML_W=new Set(['강아지','개','고양이','토끼','곰','판다','여우','사자','호랑이','코끼리','기린','원숭이','돼지','소','말','양','닭','오리','펭귄','개구리','물고기','상어','고래','돌고래','나비','벌','공룡','용','유니콘']);
+const VEHI_W=new Set(['자동차','버스','기차','지하철','비행기','로켓','배','자전거','소방차','구급차','경찰차','트럭','로더','헬리콥터']);
+const THEMES={
+  food:{s1:'#FFE4B5',s2:'#FFF8DC',g1:'#DEB887',g2:'#8B5E3C'},
+  animal:{s1:'#B7F5C8',s2:'#E8FFF0',g1:'#7BC47E',g2:'#2E6B30'},
+  vehicle:{s1:'#B8D4F0',s2:'#E8F4FF',g1:'#6688AA',g2:'#2A3F55'},
+  nature:{s1:'#C5EAB8',s2:'#F0FAE8',g1:'#88BB6A',g2:'#3A6B28'},
+  default:{s1:'#D4BBFF',s2:'#F5EEFF',g1:'#9E88CC',g2:'#5A3A88'},
+};
+function getTheme(w){
+  if(FOOD_W.has(w))return THEMES.food;
+  if(ANML_W.has(w))return THEMES.animal;
+  if(VEHI_W.has(w))return THEMES.vehicle;
+  if(['꽃','장미','해바라기','나무','소나무','야자수','선인장','해','달','별','구름','무지개','눈','비','바다','산'].includes(w))return THEMES.nature;
+  return THEMES.default;
+}
+function getEmoji(w){
+  if(EMAP[w])return EMAP[w];
+  for(const k of Object.keys(EMAP)){if(w.includes(k)||k.includes(w))return EMAP[k];}
+  return['🌟','🎀','🎊','🌈','✨','🎈','💫','🌺','🍀','🦋'][hsh(w)%10];
+}
+function makeSentence(word){
+  const T=[
+    w=>josa(w,'이','가')+' 깡충깡충 뛰어요.',
+    w=>josa(w,'은','는')+' 참 귀여워요!',
+    w=>josa(w,'은','는')+' 어디서 왔을까요?',
+    w=>'예쁜 '+josa(w,'을','를')+' 발견했어요!',
+    w=>josa(w,'이','가')+' 방긋방긋 웃어요.',
+    w=>'반짝반짝 빛나는 '+w+'!',
+    w=>'귀여운 '+josa(w,'을','를')+' 봐요!',
+    w=>josa(w,'이','가')+' 폴짝폴짝 놀아요.',
+    w=>'알록달록 아름다운 '+w+'.',
+    w=>josa(w,'은','는')+' 정말 멋져요!',
+    w=>'동글동글 귀여운 '+w+'!',
+    w=>josa(w,'이','가')+' 살금살금 다가와요.',
+  ];
+  return T[hsh(word)%T.length](word);
+}
+
+/* CANVAS ILLUSTRATION */
+function drawIllust(cv,word,accentCol,w,h){
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d');
+  const theme=getTheme(word);
+  const emoji=getEmoji(word);
+  const seed=hsh(word);
+  const[ar,ag,ab]=h2rgb(accentCol);
+  const sky=ctx.createLinearGradient(0,0,0,h);
+  sky.addColorStop(0,theme.s1);sky.addColorStop(1,theme.s2);
+  ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
+  for(let i=0;i<5;i++){
+    ctx.beginPath();
+    ctx.arc((seed*(i*73+17)%w),(seed*(i*41+11)%(h*.6)),28+(seed*(i*29+3)%50),0,Math.PI*2);
+    ctx.fillStyle=`rgba(${ar},${ag},${ab},${.05+(seed*(i*13+7)%35)/1000})`;
+    ctx.fill();
+  }
+  function cloud(cx,cy,sc){
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    [[0,0,26],[25,-10,18],[-22,-7,16],[44,3,14],[-40,3,13]].forEach(([dx,dy,r])=>{
+      ctx.beginPath();ctx.arc(cx+dx*sc,cy+dy*sc,r*sc,0,Math.PI*2);ctx.fill();
+    });
+  }
+  cloud(w*.15,h*.2,1);cloud(w*.73,h*.15,.72);
+  if(seed%2===0)cloud(w*.45,h*.12,.55);
+  const gg=ctx.createLinearGradient(0,h*.78,0,h);
+  gg.addColorStop(0,theme.g1);gg.addColorStop(1,theme.g2);
+  ctx.fillStyle=gg;
+  ctx.beginPath();ctx.moveTo(0,h*.82);
+  ctx.bezierCurveTo(w*.25,h*.76,w*.5,h*.82,w*.75,h*.78);
+  ctx.bezierCurveTo(w*.88,h*.75,w*.95,h*.8,w,h*.8);
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill();
+  const FC=['#FF9ECD','#FFD966','#FF7A7A','#A8EDCA','#B5B4FF'];
+  for(let i=0;i<6;i++){
+    const fx=60+i*((w-80)/5)+(seed*(i*31)%30)-15;
+    const fy=h*.88+(seed*(i*17+5)%16);
+    ctx.fillStyle=FC[seed*(i*7+1)%FC.length];
+    for(let p=0;p<5;p++){const a=(p/5)*Math.PI*2;ctx.beginPath();ctx.arc(fx+Math.cos(a)*6,fy+Math.sin(a)*6,4.5,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='#FFE566';ctx.beginPath();ctx.arc(fx,fy,3.5,0,Math.PI*2);ctx.fill();
+  }
+  [[w*.85,h*.25],[w*.06,h*.33],[w*.92,h*.5]].forEach(([sx,sy],i)=>{
+    ctx.font=`${h*.07}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=`rgba(${ar},${ag},${ab},${.5-.1*i})`;ctx.fillText('✦',sx,sy);
+  });
+  const ex=w*.72,ey=h*.5;
+  const glow=ctx.createRadialGradient(ex,ey,8,ex,ey,h*.32);
+  glow.addColorStop(0,`rgba(${ar},${ag},${ab},.22)`);glow.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=glow;ctx.beginPath();ctx.arc(ex,ey,h*.32,0,Math.PI*2);ctx.fill();
+  const eSz=h*.42;
+  ctx.font=`${eSz}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(0,0,0,.1)';ctx.fillText(emoji,ex+3,ey+4);
+  ctx.fillText(emoji,ex,ey);
+  const ov=ctx.createLinearGradient(0,h*.35,0,h);
+  ov.addColorStop(0,'rgba(20,8,50,0)');ov.addColorStop(1,'rgba(20,8,50,.52)');
+  ctx.fillStyle=ov;ctx.fillRect(0,0,w,h);
+}
+
+function hlWord(s,w){
+  const i=s.indexOf(w);if(i<0)return s;
+  return s.slice(0,i)+`<span style="background:rgba(255,235,80,.48);padding:1px 5px;border-radius:4px;text-decoration:underline;text-underline-offset:4px">${w}</span>`+s.slice(i+w.length);
+}
+function makeBadge(word,col){
+  const[r,g,b]=h2rgb(col);
+  return word.split('').map(ch=>`
+    <div style="width:64px;height:64px;background:rgba(15,5,40,.52);backdrop-filter:blur(10px);border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;border:2px solid rgba(${r},${g},${b},.6)">
+      <div style="position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.8);top:-3px;left:-3px"></div>
+      <div style="position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.8);top:-3px;right:-3px"></div>
+      <div style="position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.8);bottom:-3px;left:-3px"></div>
+      <div style="position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.8);bottom:-3px;right:-3px"></div>
+      <span style="font-size:42px;font-weight:800;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.5)">${ch}</span>
+    </div>`).join('');
+}
+
+/* CROSSHAIR SVG */
+function xhair(r,g,b){
+  return`<svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <line x1="50" y1="6" x2="50" y2="94" stroke="rgba(${r},${g},${b},.14)" stroke-width="1.5" stroke-dasharray="5,5"/>
+    <line x1="6" y1="50" x2="94" y2="50" stroke="rgba(${r},${g},${b},.14)" stroke-width="1.5" stroke-dasharray="5,5"/>
+  </svg>`;
+}
+
+/* GRID BUILDER (for illust + clean) */
+function buildGrid(word,col,availW,availH,rows){
+  const n=word.length;
+  const[r,g,b]=h2rgb(col);
+  const cols=n<=2?3:n<=4?2:1;
+  const sqW=Math.floor((availW-(cols-1)*10)/(cols*n));
+  const sqH=Math.floor((availH-(rows-1)*10)/rows);
+  const sq=Math.min(sqW,sqH,160);
+  const gSz=Math.round(sq*.87);
+  let html='<div style="display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;height:100%">';
+  for(let ri=0;ri<rows;ri++){
+    html+='<div style="display:flex;gap:10px;">';
+    for(let ci=0;ci<cols;ci++){
+      const isG=ri===0&&ci===0;
+      const bc=isG?col:`rgba(${r},${g},${b},.38)`;
+      const bw=isG?2.5:1.5;
+      const bg=isG?`rgba(${r},${g},${b},.06)`:'transparent';
+      html+=`<div style="border:${bw}px solid ${bc};border-radius:10px;display:flex;overflow:hidden;flex-shrink:0;width:${sq*n}px;height:${sq}px;background:${bg}">`;
+      for(let i=0;i<n;i++){
+        const dr=i<n-1?`border-right:1.5px dashed rgba(${r},${g},${b},.25);`:'';
+        const op=isG?.78:.12;
+        html+=`<div style="${dr}width:${sq}px;height:${sq}px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">
+          <span style="font-size:${gSz}px;font-weight:800;line-height:1;color:rgba(${r},${g},${b},${op});font-family:'Nanum Gothic',sans-serif;user-select:none;position:relative;z-index:1">${word[i]}</span>
+          ${xhair(r,g,b)}
+        </div>`;
+      }
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+  return html+'</div>';
+}
+
+/* ═══════════════════════
+   TEMPLATE 1: 일러스트형
+   ═══════════════════════ */
+function renderIllust(word,col){
+  const IH=282;
+  const cv=document.createElement('canvas');
+  drawIllust(cv,word,col,794,IH);
+  const imgData=cv.toDataURL();
+  const sentence=makeSentence(word);
+  const gridH=SH-IH-27;
+  return`
+    <div style="width:100%;height:${IH}px;position:relative;flex-shrink:0;overflow:hidden">
+      <img src="${imgData}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+      <div style="position:absolute;top:15px;left:18px;right:215px;font-size:17px;font-weight:700;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.7);line-height:1.65;word-break:keep-all;z-index:2">${hlWord(sentence,word)}</div>
+      <div style="position:absolute;bottom:14px;right:16px;display:flex;gap:7px;z-index:2">${makeBadge(word,col)}</div>
+    </div>
+    <div style="flex:1;padding:13px 16px 14px;display:flex;flex-direction:column;justify-content:center">
+      ${buildGrid(word,col,762,gridH,5)}
+    </div>`;
+}
+
+/* ═══════════════════════════════
+   TEMPLATE 2: 낱글자형
+   각 글자마다 → [컬러 모델 칸] [연습 칸들]
+   ═══════════════════════════════ */
+function renderCharCard(word,col){
+  const n=word.length;
+  const[r,g,b]=h2rgb(col);
+
+  /* 상단 타이틀 스트립 */
+  const TITLE_H=72;
+  /* 글자당 섹션: 2행 × 3열 */
+  const COLS=3, ROWS_PER=2;
+  const CHAR_GAP=14, ROW_GAP=9, SIDE_PAD=20;
+  const availH=SH-TITLE_H-SIDE_PAD*2;
+  const availW=SW-SIDE_PAD*2;
+  const sqFromW=Math.floor((availW-(COLS-1)*ROW_GAP)/COLS);
+  const sqFromH=Math.floor((availH-(n-1)*CHAR_GAP-n*ROW_GAP)/(n*ROWS_PER));
+  const sq=Math.min(sqFromW,sqFromH,220);
+  const gSz=Math.round(sq*.78);
+  const modelSz=Math.round(sq*.72);
+
+  /* 타이틀: 단어를 큰 컬러 박스로 */
+  const titleBoxes=word.split('').map(ch=>{
+    return`<div style="padding:6px 18px;background:rgba(${r},${g},${b},.12);border-radius:10px;border:2px solid rgba(${r},${g},${b},.3)">
+      <span style="font-size:26px;font-weight:800;color:rgba(${r},${g},${b},1);letter-spacing:2px">${ch}</span>
+    </div>`;
+  }).join('');
+
+  /* 각 글자별 섹션 생성 */
+  const sections=word.split('').map((ch,ci)=>{
+    /* 모델 셀 색상: 글자마다 조금씩 다른 명도 */
+    const shade=ci%2===0?0:18;
+    const[mr,mg,mb]=darken(r,g,b,shade);
+
+    let rows='';
+    for(let ri=0;ri<ROWS_PER;ri++){
+      rows+=`<div style="display:flex;gap:${ROW_GAP}px;margin-bottom:${ri<ROWS_PER-1?ROW_GAP:0}px;justify-content:center">`;
+      for(let ci2=0;ci2<COLS;ci2++){
+        const isModel=ri===0&&ci2===0;
+        if(isModel){
+          /* 컬러 배경 모델 칸 */
+          rows+=`<div style="width:${sq}px;height:${sq}px;background:rgba(${mr},${mg},${mb},1);border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 4px 14px rgba(${mr},${mg},${mb},.4)">
+            <!-- 코너 점 -->
+            <div style="position:absolute;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.65);top:-3px;left:-3px"></div>
+            <div style="position:absolute;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.65);top:-3px;right:-3px"></div>
+            <div style="position:absolute;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.65);bottom:-3px;left:-3px"></div>
+            <div style="position:absolute;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.65);bottom:-3px;right:-3px"></div>
+            <span style="font-size:${modelSz}px;font-weight:800;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.2);font-family:'Nanum Gothic',sans-serif">${ch}</span>
+          </div>`;
+        } else {
+          /* 연습 칸 (테두리 + 연한 가이드) */
+          /* 첫번째 연습 칸(row0,col1): 중간 진하기로 */
+          const isFirst=(ri===0&&ci2===1);
+          const guideOp=isFirst?0.28:0.12;
+          rows+=`<div style="width:${sq}px;height:${sq}px;border:1.5px solid rgba(${r},${g},${b},.35);border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;flex-shrink:0;background:rgba(${r},${g},${b},.02)">
+            <span style="font-size:${gSz}px;font-weight:800;line-height:1;color:rgba(${r},${g},${b},${guideOp});font-family:'Nanum Gothic',sans-serif;user-select:none;z-index:1;position:relative">${ch}</span>
+            ${xhair(r,g,b)}
+          </div>`;
+        }
+      }
+      rows+='</div>';
+    }
+    return`<div style="margin-bottom:${ci<n-1?CHAR_GAP:0}px">${rows}</div>`;
+  }).join('');
+
+  return`
+    <!-- 타이틀 스트립 -->
+    <div style="height:${TITLE_H}px;display:flex;align-items:center;justify-content:center;gap:10px;background:rgba(${r},${g},${b},.04);border-bottom:2px solid rgba(${r},${g},${b},.12);flex-shrink:0;position:relative">
+      <div style="position:absolute;left:20px;bottom:12px;font-size:12px;color:rgba(${r},${g},${b},.6);font-weight:700">진하게 쓴 칸을 따라 써 보세요</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${titleBoxes}
+      </div>
+    </div>
+    <!-- 글자 연습 구역 -->
+    <div style="flex:1;padding:${SIDE_PAD}px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+      <div style="width:100%;max-width:${sq*COLS+(COLS-1)*ROW_GAP}px">${sections}</div>
+    </div>`;
+}
+
+/* ═══════════════════════
+   TEMPLATE 3: 깔끔형
+   ═══════════════════════ */
+function renderClean(word,col){
+  const n=word.length;
+  const[r,g,b]=h2rgb(col);
+  const emoji=getEmoji(word);
+  const sentence=makeSentence(word);
+  const HEADER_H=175;
+  const gridH=SH-HEADER_H-42-27;
+  const charSz=Math.min(Math.floor((794-80)/(n+.5)),128);
+  const wordBoxes=word.split('').map((ch,i)=>{
+    const a=i%2===0?1:.78;
+    return`<div style="width:${charSz}px;height:${charSz}px;background:rgba(${r},${g},${b},${a});border-radius:15px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(${r},${g},${b},.35)">
+      <span style="font-size:${Math.round(charSz*.65)}px;font-weight:800;color:#fff;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,.2)">${ch}</span>
+    </div>`;
+  }).join('');
+  return`
+    <div style="width:100%;height:${HEADER_H}px;background:linear-gradient(135deg,rgba(${r},${g},${b},.1),rgba(${r},${g},${b},.04));position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:18px;overflow:hidden;border-bottom:3px solid rgba(${r},${g},${b},.14)">
+      <div style="position:absolute;width:200px;height:200px;border-radius:50%;background:rgba(${r},${g},${b},.06);top:-60px;left:-40px"></div>
+      <div style="position:absolute;width:150px;height:150px;border-radius:50%;background:rgba(${r},${g},${b},.06);bottom:-50px;right:-20px"></div>
+      <div style="font-size:88px;line-height:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.15));z-index:1">${emoji}</div>
+      <div style="display:flex;gap:10px;z-index:1">${wordBoxes}</div>
+    </div>
+    <div style="padding:10px 22px;background:rgba(${r},${g},${b},.07);border-bottom:2px dashed rgba(${r},${g},${b},.18);flex-shrink:0">
+      <span style="font-size:16px;font-weight:700;color:rgba(${r},${g},${b},.9);line-height:1.5">${sentence}</span>
+    </div>
+    <div style="flex:1;padding:12px 16px 14px;display:flex;flex-direction:column;justify-content:center">
+      ${buildGrid(word,col,762,gridH,5)}
+    </div>`;
+}
+
+/* GENERATE */
+function generate(){
+  const word=document.getElementById('word-input').value.trim();
+  if(!word)return;
+  let html='';
+  if(tmpl==='illust')html=renderIllust(word,acc);
+  else if(tmpl==='charcard')html=renderCharCard(word,acc);
+  else html=renderClean(word,acc);
+  const sheet=document.getElementById('sheet');
+  sheet.style.display='flex';
+  sheet.style.flexDirection='column';
+  sheet.innerHTML=html;
+  document.getElementById('status').textContent='✓ 완성!';
+}
+
+/* SCALE */
+function scaleSheet(){
+  const a=document.getElementById('preview-area');
+  const s=Math.min((a.clientWidth-40)/SW,(window.innerHeight-72)/SH,.95);
+  const w=document.getElementById('sheet-wrap');
+  w.style.transform=`scale(${s})`;
+  w.style.marginBottom=(SH*(s-1))+'px';
+  const mx=(SW*(s-1)/2)+'px';
+  w.style.marginLeft=mx;w.style.marginRight=mx;
+}
+window.addEventListener('resize',scaleSheet);
+
+/* PRINT */
+document.getElementById('print-btn').addEventListener('click',()=>{
+  const shell=document.getElementById('pshell');
+  const clone=document.getElementById('sheet').cloneNode(true);
+  clone.style.cssText='width:210mm;height:297mm;display:flex;flex-direction:column;overflow:hidden;background:#fff;border-radius:0;box-shadow:none;font-family:Nanum Gothic,sans-serif;';
+  shell.innerHTML='';shell.appendChild(clone);
+  shell.style.display='block';
+  setTimeout(()=>{window.print();setTimeout(()=>{shell.style.display='none';shell.innerHTML=''},800)},120);
+});
+
+/* EVENTS */
+document.getElementById('word-input').addEventListener('keydown',e=>{if(e.key==='Enter')generate();});
+document.getElementById('word-input').addEventListener('input',()=>{clearTimeout(window._gt);window._gt=setTimeout(generate,420);});
+document.querySelectorAll('.sw').forEach(s=>s.addEventListener('click',()=>{
+  document.querySelectorAll('.sw').forEach(x=>x.classList.remove('on'));
+  s.classList.add('on');acc=s.dataset.c;generate();
+}));
+document.querySelectorAll('.tb').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tb').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');tmpl=b.dataset.t;generate();
+}));
+
+scaleSheet();
+generate();
+</script>
+</body>
+</html>
